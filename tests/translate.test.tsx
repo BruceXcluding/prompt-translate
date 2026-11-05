@@ -115,12 +115,12 @@ test('a Chinese prompt reaches the model in English, code and paths kept verbati
   expect(await ui.find({ type: 'Text', text: /^Sent$/ })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: /Translating your prompt/ })).toBeUndefined()
   expect(await ui.find({ type: 'Text', text: /^Fix parseConfig\(\) in src\/app\/main\.ts/ })).toBeDefined()
-  // The whole of it, as the model received it.
-  const full = await command($, 'last')
-  expect(full.text).toContain('You typed:\n\n帮我修复 src/app/main.ts')
-  expect(full.text).toContain(
-    'The model received (English):\n\nFix parseConfig() in src/app/main.ts, then run `npm test` and check whether @tests/a.test.ts passes',
-  )
+  expect(
+    await ui.find({
+      type: 'Text',
+      text: 'Fix parseConfig() in src/app/main.ts, then run `npm test` and check whether @tests/a.test.ts passes',
+    }),
+  ).toBeDefined()
   await ui.press({ key: 'collapse' })
   expect(await ui.find({ type: 'Text', text: /^Typed$/ })).toBeUndefined()
   expect(await ui.find({ key: 'expand' })).toBeDefined()
@@ -336,6 +336,122 @@ test('a failed translation is not cached', async ($, on) => {
 
   expect(w.calls.length).toBe(2)
   expect(w.entered).toEqual(['你好', 'Hello'])
+})
+
+// Google Cloud Translation beneath the plugin: `answer` turns the HTML it
+// was sent into its reply; each request is kept.
+function google(on: On, answer: (html: string) => { status: number; body: unknown }) {
+  const requests: { url: string; headers: Record<string, string>; body: { q: string; target: string; format: string } }[] = []
+  on('http.fetch', (_, e) => {
+    const body = JSON.parse(e.init?.body ?? '{}')
+    requests.push({ url: e.url, headers: { ...(e.init?.headers ?? {}) }, body })
+    const r = answer(body.q)
+    return {
+      value: { status: r.status, ok: r.status < 300, headers: {}, text: JSON.stringify(r.body) },
+    }
+  })
+
+  return requests
+}
+
+const GOOGLE = { options: { engine: 'google', googleApiKey: 'test-key' } }
+
+test('Google translates, code kept out of its reach, the key in a header', GOOGLE, async ($, on) => {
+  const w = world(on, () => 'should not be used')
+  const requests = google(on, html => ({
+    status: 200,
+    body: {
+      data: {
+        translations: [
+          {
+            translatedText: html.replace('看看', 'Look at').replace(' 里的 ', ' in ').replace('谢谢', 'thanks &amp; regards'),
+            detectedSourceLanguage: 'zh-CN',
+          },
+        ],
+      },
+    },
+  }))
+  await start($)
+  await type($, '看看 src/a.ts 里的 parse()\n谢谢')
+
+  expect(w.calls.length).toBe(0)
+  expect(requests.length).toBe(1)
+  expect(requests[0]?.url).toBe('https://translation.googleapis.com/language/translate/v2')
+  expect(requests[0]?.url).not.toContain('test-key')
+  expect(requests[0]?.headers['X-Goog-Api-Key']).toBe('test-key')
+  expect(requests[0]?.body.target).toBe('en')
+  expect(requests[0]?.body.format).toBe('html')
+  expect(requests[0]?.body.q).not.toContain('src/a.ts')
+  expect(requests[0]?.body.q).toBe('看看 <span translate="no">⟦0⟧</span> 里的 <span translate="no">⟦1⟧</span><br>谢谢')
+  expect(w.entered).toEqual(['Look at src/a.ts in parse()\nthanks & regards'])
+  expect(w.status.at(-1)).toBe('Translate → English · Google')
+
+  const ui = await $.ui.mount(BAND)
+  expect(await ui.find({ type: 'Text', text: /^via Google$/ })).toBeDefined()
+  await ui.unmount()
+})
+
+test('Google saying the prompt is in the target already sends it as typed', GOOGLE, async ($, on) => {
+  const w = world(on)
+  google(on, html => ({ status: 200, body: { data: { translations: [{ translatedText: html, detectedSourceLanguage: 'en' }] } } }))
+  await start($)
+  await type($, 'Café au lait, s’il vous plaît… no, a latte')
+
+  expect(w.entered).toEqual(['Café au lait, s’il vous plaît… no, a latte'])
+})
+
+test('when Google fails, the model translates, with a notice', GOOGLE, async ($, on) => {
+  const w = world(on, () => 'Hello')
+  google(on, () => ({ status: 403, body: { error: { message: 'API key not valid' } } }))
+  await start($)
+  await type($, '你好')
+
+  expect(w.calls.length).toBe(1)
+  expect(w.entered).toEqual(['Hello'])
+  expect(w.toasts).toEqual(['Google Translate: HTTP 403, API key not valid; the model translated instead.'])
+  const ui = await $.ui.mount(BAND)
+  expect(await ui.find({ type: 'Text', text: /API key not valid/ })).toBeDefined()
+  await ui.unmount()
+})
+
+test('engine google with no key falls back to the model', { options: { engine: 'google' } }, async ($, on) => {
+  const w = world(on, () => 'Hello')
+  const requests = google(on, () => ({ status: 500, body: {} }))
+  await start($)
+  await type($, '你好')
+
+  expect(requests.length).toBe(0)
+  expect(w.entered).toEqual(['Hello'])
+  expect(w.toasts[0]).toContain('No Google API key is set')
+})
+
+test('a language Google has no code for goes to the model', GOOGLE, async ($, on) => {
+  const w = world(on, () => 'Saluton')
+  const requests = google(on, () => ({ status: 500, body: {} }))
+  await start($)
+  await command($, 'Esperanto')
+  await type($, '你好')
+
+  expect(requests.length).toBe(0)
+  expect(w.entered).toEqual(['Saluton'])
+})
+
+test('/translate engine writes the setting and warns about a missing key', async ($, on) => {
+  const set: { key: string; value: unknown }[] = []
+  world(on)
+  on('config.list', () => ({
+    value: [{ key: 'prompt-translate@prompt-translate.engine', label: 'Translation engine', value: 'model' }] as never,
+  }))
+  on('config.set', (_, e) => {
+    set.push({ key: e.key, value: e.value })
+    return { value: e.value }
+  })
+  await start($)
+
+  expect((await command($, 'engine')).text).toContain('translated by the model')
+  expect((await command($, 'engine google')).text).toContain('No Google API key is set yet')
+  expect((await command($, 'engine bing')).text).toBe('The engine is "model" or "google".')
+  expect(set).toEqual([{ key: 'prompt-translate@prompt-translate.engine', value: 'google' }])
 })
 
 test('/translate model writes the setting', async ($, on) => {

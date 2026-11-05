@@ -10,7 +10,14 @@ export type Last = {
   // failed: the translation failed, sent as typed.
   outcome: 'translated' | 'same' | 'failed'
   reason?: string
+  // Which engine translated it, when one did.
+  engine?: Engine
+  // Said beside the result: Google failed, and the model translated instead.
+  notice?: string
 }
+
+// What translates: the Claude Code model, or Google Cloud Translation.
+export type Engine = 'model' | 'google'
 
 declare module 'claude-code' {
   interface PluginState {

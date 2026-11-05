@@ -1,6 +1,6 @@
 {
   "name": "prompt-translate",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Translate whatever you type in the prompt box into one target language before it reaches the model, keeping code, paths and @file mentions verbatim.",
   "author": {
     "name": "BruceXcluding",
@@ -35,6 +35,23 @@
       "title": "On at session start",
       "description": "Whether translation is on when a session starts; /translate on|off changes it for the session.",
       "default": true
+    },
+    "engine": {
+      "type": "string",
+      "title": "Translation engine",
+      "description": "model: your Claude Code model translates (default). google: Google Cloud Translation, which needs googleApiKey; prompts then go to Google.",
+      "options": [
+        "model",
+        "google"
+      ],
+      "default": "model"
+    },
+    "googleApiKey": {
+      "type": "string",
+      "title": "Google Cloud Translation API key",
+      "description": "Only for engine google. Kept in secure storage, sent to Google in a request header.",
+      "sensitive": true,
+      "default": ""
     }
   }
 }

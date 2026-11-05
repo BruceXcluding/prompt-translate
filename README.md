@@ -40,9 +40,9 @@ Translation uses your own Claude Code connection: the session's model, or the on
 ## Commands
 
 - `/translate`: show whether translation is on
-- `/translate last`: show what you typed and exactly what the model received
 - `/translate model <name>`: translate with another model, e.g. `haiku`; `/translate model default` goes back to the session's model
 - `/translate off` · `/translate on`: switch it for this session
+- `/translate engine google` · `/translate engine model`: translate with Google Translate or with the model
 - `/translate <language>`: translate into another language from now on (`zh`, `Japanese`, `中文`, `fr`, ...)
 
 ## Settings
@@ -52,6 +52,21 @@ Translation uses your own Claude Code connection: the session's model, or the on
 | `language` | `English` | The language prompts are sent in |
 | `model` | empty | A cheaper model for translating; empty uses the session's own model |
 | `enabled` | `true` | Whether translation is on when a session starts |
+| `engine` | `model` | `model`: your Claude Code model translates. `google`: Google Cloud Translation does |
+| `googleApiKey` | empty | Your Google Cloud Translation API key, for engine `google`; kept in secure storage |
+
+### Google Translate
+
+Set `engine` to `google` (or run `/translate engine google`) and add a Cloud Translation API key as
+`googleApiKey` with `/plugin configure prompt-translate@prompt-translate` in a terminal session. Google is
+fast and needs no model call; the model is more careful with technical prompts.
+
+- It uses the official Cloud Translation API, which needs a Google Cloud project with billing on.
+  The first 500,000 characters a month are free, then about $20 per million.
+- Your prompt, with code, paths and `@file` mentions taken out, goes to Google. The key travels in a
+  request header, never in the URL.
+- Where Google fails, has no key, or has no code for the target language, the model translates instead,
+  with a notice.
 
 ## Development
 

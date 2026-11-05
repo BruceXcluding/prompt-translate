@@ -139,6 +139,109 @@ export function readReply(reply: string): Reply {
   return { kind: 'text', text }
 }
 
+// ─── Google Cloud Translation ──────────────────────────────────────────────
+
+export const GOOGLE_URL = 'https://translation.googleapis.com/language/translate/v2'
+
+// Google's code for each language name `languageName` gives.
+const GOOGLE_CODES: Readonly<Record<string, string>> = {
+  English: 'en',
+  'Simplified Chinese': 'zh-CN',
+  'Traditional Chinese': 'zh-TW',
+  Japanese: 'ja',
+  Korean: 'ko',
+  French: 'fr',
+  German: 'de',
+  Spanish: 'es',
+  Russian: 'ru',
+  Portuguese: 'pt',
+  Italian: 'it',
+  Dutch: 'nl',
+  Arabic: 'ar',
+  Hindi: 'hi',
+  Vietnamese: 'vi',
+  Thai: 'th',
+  Indonesian: 'id',
+  Turkish: 'tr',
+  Polish: 'pl',
+  Ukrainian: 'uk',
+}
+
+// Google's code for a language, or undefined where Google is not told one:
+// the model translates into it instead.
+export function googleCode(language: string): string | undefined {
+  const t = language.trim()
+
+  return GOOGLE_CODES[t] ?? (/^[a-z]{2,3}(-[A-Za-z]{2,4})?$/.test(t) ? t : undefined)
+}
+
+const ESCAPES: Readonly<Record<string, string>> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }
+
+// The masked text as HTML for Google: escaped, each placeholder in a span it
+// is told not to translate, line breaks as <br> so they survive.
+export function googleHtml(masked: string): string {
+  return masked
+    .replace(/[&<>"]/g, c => ESCAPES[c]!)
+    .replace(/⟦\d+⟧/g, m => `<span translate="no">${m}</span>`)
+    .replace(/\n/g, '<br>')
+}
+
+const UNESCAPES: Readonly<Record<string, string>> = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ' }
+
+// Google's HTML reply as text again: spans and tags off, line breaks and
+// entities back. The placeholders are then put back by `unmask`.
+export function fromGoogleHtml(html: string): string {
+  return html
+    .replace(/<br\s*\/?>\s?/gi, '\n')
+    .replace(/<\/?span[^>]*>/gi, '')
+    .replace(/&(#\d+|#x[0-9a-f]+|[a-z]+);/gi, (whole, name: string) => {
+      if (name[0] === '#') {
+        const n = name[1]?.toLowerCase() === 'x' ? parseInt(name.slice(2), 16) : parseInt(name.slice(1), 10)
+
+        return Number.isFinite(n) ? String.fromCodePoint(n) : whole
+      }
+
+      return UNESCAPES[name.toLowerCase()] ?? whole
+    })
+}
+
+// Whether the language Google detected is the target: the same code, or the
+// same base language where the base alone settles it (`en-GB` for `en`).
+export function isSameLanguage(detected: string, target: string): boolean {
+  const a = detected.toLowerCase()
+  const b = target.toLowerCase()
+  if (a === b) return true
+  const base = b.split('-')[0]
+
+  return base !== 'zh' && a.split('-')[0] === base
+}
+
+export type GoogleReply = { kind: 'same' } | { kind: 'text'; text: string } | { kind: 'error'; reason: string }
+
+// Reads the Translation API's JSON answer; `status` its HTTP status.
+export function readGoogle(status: number, body: string, target: string): GoogleReply {
+  let json: unknown
+  try {
+    json = JSON.parse(body)
+  } catch {
+    return { kind: 'error', reason: `Google Translate: HTTP ${status}` }
+  }
+  const answer = json as {
+    error?: { message?: string }
+    data?: { translations?: { translatedText?: string; detectedSourceLanguage?: string }[] }
+  }
+  if (status < 200 || status >= 300 || answer.error !== undefined) {
+    return { kind: 'error', reason: `Google Translate: HTTP ${status}${answer.error?.message ? `, ${answer.error.message}` : ''}` }
+  }
+  const first = answer.data?.translations?.[0]
+  if (typeof first?.translatedText !== 'string') return { kind: 'error', reason: 'Google Translate: no translation in the reply' }
+  if (first.detectedSourceLanguage !== undefined && isSameLanguage(first.detectedSourceLanguage, target)) {
+    return { kind: 'same' }
+  }
+
+  return { kind: 'text', text: fromGoogleHtml(first.translatedText) }
+}
+
 // ─── Language names ────────────────────────────────────────────────────────
 
 // Common names and codes for a language, as the person may type them.

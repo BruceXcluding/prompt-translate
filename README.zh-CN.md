@@ -40,9 +40,9 @@ claude plugin install prompt-translate --marketplace BruceXcluding/prompt-transl
 ## 命令
 
 - `/translate`：查看当前状态
-- `/translate last`：查看你输入的原文和模型实际收到的完整内容
 - `/translate model <名称>`：用其他模型翻译，例如 `haiku`；`/translate model default` 恢复为会话自身的模型
 - `/translate off` · `/translate on`：在本会话中关闭或开启
+- `/translate engine google` · `/translate engine model`：改用 Google 翻译或模型翻译
 - `/translate <语言>`：改为翻译成其他语言（`zh`、`Japanese`、`中文`、`fr` 等）
 
 ## 设置
@@ -52,6 +52,17 @@ claude plugin install prompt-translate --marketplace BruceXcluding/prompt-transl
 | `language` | `English` | 提示词发送时使用的语言 |
 | `model` | 空 | 用于翻译的更便宜的模型；留空则使用会话自身的模型 |
 | `enabled` | `true` | 会话开始时是否开启翻译 |
+| `engine` | `model` | `model`：由 Claude Code 的模型翻译；`google`：由 Google Cloud Translation 翻译 |
+| `googleApiKey` | 空 | Google Cloud Translation API 密钥，仅用于 `google` 引擎；保存在系统安全存储中 |
+
+### Google 翻译
+
+把 `engine` 设为 `google`（或运行 `/translate engine google`），并在终端会话中用
+`/plugin configure prompt-translate@prompt-translate` 把 API 密钥填入 `googleApiKey`。Google 速度快、不调用模型；模型对技术类提示词更细致。
+
+- 使用官方 Cloud Translation API，需要开通了结算的 Google Cloud 项目。每月前 50 万字符免费，之后约每百万字符 20 美元。
+- 提示词（去掉代码、路径和 `@file` 引用后）会发送给 Google。密钥放在请求头中，不会出现在 URL 里。
+- Google 出错、未设置密钥或不支持目标语言时，改由模型翻译，并给出提示。
 
 ## 开发
 
