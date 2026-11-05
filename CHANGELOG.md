@@ -4,6 +4,14 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [0.3.0] - 2026-11-05
+
+### Added
+- An **Options** button on the band that opens an Engine picker (Claude model or Google Translate)
+  and a Model picker (session's model, haiku, sonnet, opus, or the one set); a pick writes the
+  setting and says what changed. With Google and no key set, the band says how to add one. On
+  mobile, which draws no picker, it names the commands instead.
+
 ## [0.2.0] - 2026-11-05
 
 ### Added

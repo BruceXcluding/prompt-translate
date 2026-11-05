@@ -35,6 +35,7 @@ const settings = atom({ plugin: 'prompt-translate', key: 'settings' } as const, 
 const last = atom({ plugin: 'prompt-translate', key: 'last' } as const, null, { shape: 'last-2' })
 const isCollapsed = atom({ plugin: 'prompt-translate', key: 'isCollapsed' } as const, false)
 const isTranslating = atom({ plugin: 'prompt-translate', key: 'isTranslating' } as const, false)
+const isOptionsOpen = atom({ plugin: 'prompt-translate', key: 'isOptionsOpen' } as const, false)
 
 type Outcome = Pick<Last, 'sent' | 'outcome' | 'reason' | 'engine' | 'notice'>
 
@@ -43,6 +44,21 @@ type Outcome = Pick<Last, 'sent' | 'outcome' | 'reason' | 'engine' | 'notice'>
 type Setup = { engine: Engine; model: string; googleKey: string }
 
 const ENGINE_NAMES: Readonly<Record<Engine, string>> = { model: 'the model', google: 'Google Translate' }
+
+// The band's pickers. The model picker's first option stands for the
+// session's own model, as an empty `model` setting does.
+const ENGINE_OPTIONS = [
+  { value: 'model', label: 'Claude model' },
+  { value: 'google', label: 'Google Translate' },
+] as const
+const SESSION_MODEL = 'session'
+const MODEL_ALIASES = ['haiku', 'sonnet', 'opus']
+
+function modelOptions(model: string): { value: string; label: string }[] {
+  const listed = [{ value: SESSION_MODEL, label: "Session's model" }, ...MODEL_ALIASES.map(m => ({ value: m, label: m }))]
+
+  return model === '' || MODEL_ALIASES.includes(model) ? listed : [...listed, { value: model, label: model }]
+}
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -350,10 +366,14 @@ export const register: Register = (on, options) => {
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
     const s = await current($, defaults)
     if (e.props.hasSurvey || !s.enabled) return next(e)
-    const { Box, Button, Text } = $.ui.resolve(e)
+    const elements = $.ui.resolve(e)
+    const { Box, Button, Text } = elements
+    // Every surface but mobile draws a Select; there the command stands in.
+    const Select = e.surface !== 'mobile' && 'Select' in elements ? elements.Select : undefined
     const shown = await read($, last)
     const isBusy = await read($, isTranslating)
     const isOpen = shown !== null && !(await read($, isCollapsed))
+    const optionsOpen = await read($, isOptionsOpen)
     // The row's width less the label column and the band's own margin.
     const width = Math.max(30, e.props.bodyColumns - LABEL_COLUMNS - 2)
 
@@ -376,6 +396,13 @@ export const register: Register = (on, options) => {
             {setup.engine === 'google' ? <Text color="subtle">via Google</Text> : null}
           </Box>
           <Box flexDirection="row" columnGap="sm">
+            <Button
+              key="options"
+              label={optionsOpen ? 'Done' : 'Options'}
+              plain
+              dimColor
+              onPress={() => update($, isOptionsOpen, () => !optionsOpen)}
+            />
             {shown === null ? null : isOpen ? (
               <Button key="collapse" label="Hide" plain dimColor onPress={() => update($, isCollapsed, () => true)} />
             ) : (
@@ -384,6 +411,42 @@ export const register: Register = (on, options) => {
             <Button key="off" label="Turn off" plain dimColor onPress={() => save($, { ...s, enabled: false }, setup.engine)} />
           </Box>
         </Box>
+        {optionsOpen && Select === undefined ? (
+          <Text color="subtle">
+            Engine: {ENGINE_NAMES[setup.engine]}. Change it with /translate engine google|model, the model with
+            /translate model &lt;name&gt;.
+          </Text>
+        ) : null}
+        {optionsOpen && Select !== undefined ? (
+          <Box flexDirection="column" rowGap="xs">
+            <Box flexDirection="row" columnGap="md" flexWrap="wrap">
+              <Select
+                key="engine"
+                label="Engine"
+                options={ENGINE_OPTIONS}
+                value={setup.engine}
+                onSelect={async (value: string) => $.ui.toast(await engineCommand($, value, setup))}
+              />
+              {setup.engine === 'model' ? (
+                <Select
+                  key="model"
+                  label="Model"
+                  options={modelOptions(setup.model)}
+                  value={setup.model === '' ? SESSION_MODEL : setup.model}
+                  onSelect={async (value: string) =>
+                    $.ui.toast(await modelCommand($, value === SESSION_MODEL ? 'default' : value, setup.model))
+                  }
+                />
+              ) : null}
+            </Box>
+            {setup.engine === 'google' && setup.googleKey === '' ? (
+              <Text color="warning">
+                ⚠ No Google API key yet: add googleApiKey with /plugin configure prompt-translate@prompt-translate in a
+                terminal. Until then the model translates.
+              </Text>
+            ) : null}
+          </Box>
+        ) : null}
         {isBusy ? (
           <Text color="subtle" italic>
             Translating your prompt…

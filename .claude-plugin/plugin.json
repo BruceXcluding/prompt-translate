@@ -1,6 +1,6 @@
 {
   "name": "prompt-translate",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Translate whatever you type in the prompt box into one target language before it reaches the model, keeping code, paths and @file mentions verbatim.",
   "author": {
     "name": "BruceXcluding",

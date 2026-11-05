@@ -39,6 +39,9 @@ Translation uses your own Claude Code connection: the session's model, or the on
 
 ## Commands
 
+The band's **Options** button opens an **Engine** picker (Claude model or Google Translate) and a **Model** picker (the session's model, `haiku`, `sonnet`, `opus`). They change the same settings as the commands below.
+
+
 - `/translate`: show whether translation is on
 - `/translate model <name>`: translate with another model, e.g. `haiku`; `/translate model default` goes back to the session's model
 - `/translate off` · `/translate on`: switch it for this session

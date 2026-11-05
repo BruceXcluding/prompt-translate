@@ -25,6 +25,8 @@ declare module 'claude-code' {
       settings: Shaped<Settings | null>
       last: Shaped<Last | null>
       isCollapsed: boolean
+      // Whether the band's engine and model pickers are open.
+      isOptionsOpen: boolean
       // True while a prompt waits on its translation.
       isTranslating: boolean
     }

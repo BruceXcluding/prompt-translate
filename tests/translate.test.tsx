@@ -454,6 +454,79 @@ test('/translate engine writes the setting and warns about a missing key', async
   expect(set).toEqual([{ key: 'prompt-translate@prompt-translate.engine', value: 'google' }])
 })
 
+// The mod's two settings rows in /config, and what is written to them.
+function configRows(on: On) {
+  const set: { key: string; value: unknown }[] = []
+  on('config.list', () => ({
+    value: [
+      { key: 'prompt-translate@prompt-translate.engine', label: 'Translation engine', value: 'model' },
+      { key: 'prompt-translate@prompt-translate.model', label: 'Translation model', value: '' },
+    ] as never,
+  }))
+  on('config.set', (_, e) => {
+    set.push({ key: e.key, value: e.value })
+    return { value: e.value }
+  })
+
+  return set
+}
+
+test('the band picks the engine and the model', async ($, on) => {
+  const w = world(on)
+  const set = configRows(on)
+  await start($)
+
+  const ui = await $.ui.mount(BAND)
+  expect(await ui.find({ key: 'engine' })).toBeUndefined()
+  await ui.press({ key: 'options' })
+  expect(await ui.find({ key: 'options' })).toMatchObject({ text: 'Done' })
+  expect(await ui.find({ key: 'engine' })).toBeDefined()
+  await ui.select({ key: 'model', value: 'haiku' })
+  await ui.select({ key: 'model', value: 'session' })
+  await ui.select({ key: 'engine', value: 'google' })
+  await ui.unmount()
+
+  expect(set).toEqual([
+    { key: 'prompt-translate@prompt-translate.model', value: 'haiku' },
+    { key: 'prompt-translate@prompt-translate.model', value: '' },
+    { key: 'prompt-translate@prompt-translate.engine', value: 'google' },
+  ])
+  expect(w.toasts[0]).toBe('Translating with haiku from now on.')
+  expect(w.toasts[2]).toContain('Translating with Google Translate from now on')
+})
+
+test('with Google chosen and no key, the band says how to add one, and hides the model picker', { options: { engine: 'google' } }, async ($, on) => {
+  world(on)
+  await start($)
+
+  const ui = await $.ui.mount(BAND)
+  await ui.press({ key: 'options' })
+  expect(await ui.find({ key: 'model' })).toBeUndefined()
+  expect(await ui.find({ type: 'Text', text: /No Google API key yet/ })).toBeDefined()
+  await ui.unmount()
+})
+
+test('on mobile, where there is no picker, the options say which command to use', async ($, on) => {
+  world(on)
+  await start($)
+
+  const ui = await $.ui.mount({ ...BAND, surface: 'mobile' })
+  await ui.press({ key: 'options' })
+  expect(await ui.find({ type: 'Text', text: /\/translate engine google\|model/ })).toBeDefined()
+  await ui.unmount()
+})
+
+test('a model set outside the list is offered in the picker', { options: { model: 'claude-haiku-5-5' } }, async ($, on) => {
+  world(on)
+  await start($)
+
+  const ui = await $.ui.mount(BAND)
+  await ui.press({ key: 'options' })
+  expect(await ui.find({ key: 'model' })).toBeDefined()
+  expect(JSON.stringify(await ui.drawn())).toContain('claude-haiku-5-5')
+  await ui.unmount()
+})
+
 test('/translate model writes the setting', async ($, on) => {
   const set: { key: string; value: unknown }[] = []
   world(on)

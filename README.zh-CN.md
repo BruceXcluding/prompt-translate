@@ -39,6 +39,9 @@ claude plugin install prompt-translate --marketplace BruceXcluding/prompt-transl
 
 ## 命令
 
+横条上的 **Options** 按钮会打开 **Engine**（Claude 模型或 Google 翻译）和 **Model**（会话自身的模型、`haiku`、`sonnet`、`opus`）两个选择器，作用与下面的命令相同。
+
+
 - `/translate`：查看当前状态
 - `/translate model <名称>`：用其他模型翻译，例如 `haiku`；`/translate model default` 恢复为会话自身的模型
 - `/translate off` · `/translate on`：在本会话中关闭或开启
