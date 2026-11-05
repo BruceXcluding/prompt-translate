@@ -1,0 +1,40 @@
+{
+  "name": "prompt-translate",
+  "version": "0.1.0",
+  "description": "Translate whatever you type in the prompt box into one target language before it reaches the model, keeping code, paths and @file mentions verbatim.",
+  "author": {
+    "name": "BruceXcluding",
+    "url": "https://github.com/BruceXcluding"
+  },
+  "homepage": "https://github.com/BruceXcluding/prompt-translate",
+  "repository": "https://github.com/BruceXcluding/prompt-translate",
+  "license": "MIT",
+  "keywords": [
+    "translate",
+    "translation",
+    "prompt",
+    "language",
+    "i18n"
+  ],
+  "types": "./types/index.d.ts",
+  "userConfig": {
+    "language": {
+      "type": "string",
+      "title": "Target language",
+      "description": "The language every prompt is sent to the model in, e.g. English, Simplified Chinese, Japanese.",
+      "default": "English"
+    },
+    "model": {
+      "type": "string",
+      "title": "Translation model",
+      "description": "Optional cheaper model for translating (an alias or full id). Empty: the session's own model.",
+      "default": ""
+    },
+    "enabled": {
+      "type": "boolean",
+      "title": "On at session start",
+      "description": "Whether translation is on when a session starts; /translate on|off changes it for the session.",
+      "default": true
+    }
+  }
+}

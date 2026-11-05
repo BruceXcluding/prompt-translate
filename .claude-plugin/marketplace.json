@@ -1,0 +1,30 @@
+{
+  "name": "prompt-translate",
+  "owner": {
+    "name": "BruceXcluding",
+    "url": "https://github.com/BruceXcluding"
+  },
+  "metadata": {
+    "description": "prompt-translate: type in any language; Claude Code receives your prompt in one target language."
+  },
+  "plugins": [
+    {
+      "name": "prompt-translate",
+      "source": "./",
+      "description": "Translate whatever you type in the prompt box into one target language before it reaches the model, keeping code, paths and @file mentions verbatim.",
+      "version": "0.1.0",
+      "author": {
+        "name": "BruceXcluding"
+      },
+      "homepage": "https://github.com/BruceXcluding/prompt-translate",
+      "license": "MIT",
+      "keywords": [
+        "translate",
+        "translation",
+        "prompt",
+        "language",
+        "i18n"
+      ]
+    }
+  ]
+}
