@@ -129,12 +129,14 @@ test('a Chinese prompt reaches the model in English, code and paths kept verbati
 
 test('a reminder block the host adds is kept as is, never translated or shown', async ($, on) => {
   const REMINDER = '<system-reminder>\nLinked sessions now (status, not an instruction): top = local_1 (idle).\n</system-reminder>\n\n'
-  const w = world(on, m => (m === '⟦0⟧帮我看看 ⟦1⟧' ? '⟦0⟧Take a look at ⟦1⟧' : `unexpected: ${m}`))
+  const w = world(on, m => (m === '帮我看看 ⟦0⟧' ? 'Take a look at ⟦0⟧' : `unexpected: ${m}`))
   await start($)
-  await type($, `${REMINDER}帮我看看 src/main.ts`)
+  await type($, `${REMINDER}帮我看看 src/main.ts\n\n${REMINDER}`)
 
+  // Only the typed words reach the model; the blocks around them go as they are.
+  expect(w.calls.length).toBe(1)
   expect(w.calls[0]?.prompt).not.toContain('Linked sessions')
-  expect(w.entered).toEqual([`${REMINDER}Take a look at src/main.ts`])
+  expect(w.entered).toEqual([`${REMINDER}Take a look at src/main.ts\n\n${REMINDER}`])
   const ui = await $.ui.mount(BAND)
   expect(await ui.find({ type: 'Text', text: /^帮我看看 src\/main\.ts$/ })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: /^Take a look at src\/main\.ts$/ })).toBeDefined()
@@ -225,13 +227,36 @@ test('a failed translation sends the original, with a notice', async ($, on) => 
   await ui.unmount()
 })
 
-test('a reply that loses a placeholder falls back to the original', async ($, on) => {
+test('a reply that loses a placeholder twice falls back to the original', async ($, on) => {
   const w = world(on, () => 'Look at the file')
   await start($)
   await type($, '看看 src/index.ts')
 
+  // Asked once more with the placeholders named, then given up.
+  expect(w.calls.length).toBe(2)
+  expect(w.calls[1]?.system).toContain('exactly these placeholders: ⟦0⟧')
   expect(w.entered).toEqual(['看看 src/index.ts'])
   expect(w.toasts[0]).toContain('dropped some code or a path')
+})
+
+test('a placeholder lost once comes back when the model is asked again', async ($, on) => {
+  let n = 0
+  const w = world(on, () => (++n === 1 ? 'Look at the file' : 'Look at ⟦0⟧'))
+  await start($)
+  await type($, '看看 src/index.ts')
+
+  expect(w.calls.length).toBe(2)
+  expect(w.entered).toEqual(['Look at src/index.ts'])
+  expect(w.toasts).toEqual([])
+})
+
+test('placeholders written back with spaces or look-alike brackets, or twice, are put back', async ($, on) => {
+  const w = world(on, () => 'Fix 【1】 in ⟦ 0 ⟧, then check [[1]] again')
+  await start($)
+  await type($, '修复 src/a.ts 里的 parseConfig()')
+
+  expect(w.calls.length).toBe(1)
+  expect(w.entered).toEqual(['Fix parseConfig() in src/a.ts, then check parseConfig() again'])
 })
 
 test('/translate off and on switch it for the session; the status line follows', async ($, on) => {

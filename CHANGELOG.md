@@ -4,6 +4,10 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## 0.3.1
+
+- Fewer "dropped some code or a path" failures: the blocks the app adds around a prompt are no longer sent to be translated, placeholders the model writes back slightly differently are accepted, and a reply that loses one is asked for once more.
+
 ## [0.3.0] - 2026-11-05
 
 ### Added

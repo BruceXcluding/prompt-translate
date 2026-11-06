@@ -10,11 +10,13 @@ import {
   isPlainlyIn,
   isWordless,
   languageName,
+  mark,
   mask,
   oneLine,
   promptFor,
   readGoogle,
   readReply,
+  splitHost,
   systemFor,
   unmask,
   visible,
@@ -104,9 +106,17 @@ type Cache = Map<string, Reply>
 
 // The model's reply for the masked words, or why there is none. The same
 // words asked again, to the same model and language, cost no second call.
-async function ask($: EngineInterface, masked: string, language: string, model: string, cache: Cache): Promise<Reply | string> {
+// `marks`, on a second try, names the placeholders the first reply lost.
+async function ask(
+  $: EngineInterface,
+  masked: string,
+  language: string,
+  model: string,
+  cache: Cache,
+  marks?: readonly string[],
+): Promise<Reply | string> {
   const use = model !== '' ? model : await $.session.model()
-  const key = `${use}\u0000${language}\u0000${masked}`
+  const key = `${use}\u0000${language}\u0000${marks ? 'again' : ''}\u0000${masked}`
   const hit = cache.get(key)
   if (hit !== undefined) {
     cache.delete(key)
@@ -116,7 +126,7 @@ async function ask($: EngineInterface, masked: string, language: string, model: 
   }
   const r = await $.model.complete({
     model: use,
-    system: systemFor(language),
+    system: systemFor(language, marks),
     prompt: promptFor(masked),
     maxTokens: Math.min(16_000, Math.max(1024, masked.length * 4)),
     // Translating needs no deliberation; dropped for a model without effort.
@@ -160,20 +170,29 @@ async function askGoogle($: EngineInterface, masked: string, language: string, k
   return reply
 }
 
+const LOST = 'the translation dropped some code or a path'
+
 // A reply as the prompt to send, or why it cannot be sent.
 function settle(text: string, reply: Reply, spans: readonly string[], engine: Engine): Outcome {
   if (reply.kind === 'same') return { sent: text, outcome: 'same', engine }
   const sent = unmask(reply.text, spans)
-  if (sent === undefined) return { sent: text, outcome: 'failed', reason: 'the translation dropped some code or a path' }
+  if (sent === undefined) return { sent: text, outcome: 'failed', reason: LOST }
   if (sent.trim() === '') return { sent: text, outcome: 'failed', reason: 'the translation came back empty' }
 
   return { sent, outcome: sent === text ? 'same' : 'translated', engine }
 }
 
-// The prompt in `language`, or as typed with why. With engine google and a
-// key, Google translates; where it cannot, the model does, with a notice.
+// The prompt in `language`, or as typed with why. Only what was typed is
+// translated: the host's blocks around it go as they are. With engine google
+// and a key, Google translates; where it cannot, the model does, with a notice.
 async function translate($: EngineInterface, text: string, language: string, setup: Setup, cache: Cache): Promise<Outcome> {
-  const masked = mask(text)
+  const { head, body, tail } = splitHost(text)
+  const words = body.trim()
+  const lead = body.slice(0, body.indexOf(words))
+  const trail = body.slice(lead.length + words.length)
+  const whole = (o: Outcome): Outcome => (o.outcome === 'translated' ? { ...o, sent: head + lead + o.sent + trail + tail } : { ...o, sent: text })
+
+  const masked = mask(words)
   if (isWordless(masked.text) || isPlainlyIn(language, masked.text)) return { sent: text, outcome: 'same' }
   let notice: string | undefined
   try {
@@ -182,14 +201,21 @@ async function translate($: EngineInterface, text: string, language: string, set
         notice = 'No Google API key is set; the model translated instead.'
       } else {
         const google = await askGoogle($, masked.text, language, setup.googleKey, cache).catch(errorText)
-        if (typeof google !== 'string') return settle(text, google, masked.spans, 'google')
-        notice = `${google}; the model translated instead.`
+        const done = typeof google === 'string' ? undefined : settle(words, google, masked.spans, 'google')
+        if (done !== undefined && done.reason !== LOST) return whole(done)
+        notice = `${typeof google === 'string' ? google : `Google Translate: ${LOST}`}; the model translated instead.`
       }
     }
-    const reply = await ask($, masked.text, language, setup.model, cache)
+    let reply = await ask($, masked.text, language, setup.model, cache)
     if (typeof reply === 'string') return { sent: text, outcome: 'failed', reason: notice ? `${notice} ${reply}` : reply }
+    let done = settle(words, reply, masked.spans, 'model')
+    if (done.reason === LOST) {
+      // Asked once more, the placeholders named: most lost ones come back.
+      reply = await ask($, masked.text, language, setup.model, cache, masked.spans.map((_, i) => mark(i)))
+      if (typeof reply !== 'string') done = settle(words, reply, masked.spans, 'model')
+    }
 
-    return { ...settle(text, reply, masked.spans, 'model'), notice }
+    return { ...whole(done), notice }
   } catch (err) {
     return { sent: text, outcome: 'failed', reason: errorText(err), notice }
   }
