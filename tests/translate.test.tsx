@@ -294,6 +294,15 @@ test('the band draws on every surface', async ($, on) => {
   }
 })
 
+test('the band draws above what the plugins beneath it draw', async ($, on) => {
+  world(on)
+  await start($)
+  const ui = await $.ui.mount(BAND)
+  expect(await ui.find({ type: 'Text', text: /Translating into English/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: 'engine' })).toBeDefined()
+  await ui.unmount()
+})
+
 test('the band turns translation off', async ($, on) => {
   const w = world(on)
   await start($)

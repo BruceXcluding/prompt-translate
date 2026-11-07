@@ -412,7 +412,7 @@ export const register: Register = (on, options) => {
       </Box>
     )
 
-    return (
+    const band = (
       <Box flexDirection="column" rowGap="xs">
         <Box flexDirection="row" justifyContent="space-between" alignItems="center">
           <Box flexDirection="row" columnGap="sm">
@@ -492,6 +492,16 @@ export const register: Register = (on, options) => {
             ⚠ Sent as typed: translation failed ({oneLine(shown.reason ?? 'unknown', 80)}).
           </Text>
         )}
+      </Box>
+    )
+    // What the plugins beneath draw goes under the band, never in its place.
+    const below = await next(e)
+    if (below === null || below === undefined) return band
+
+    return (
+      <Box flexDirection="column" gap={1}>
+        {band}
+        {below}
       </Box>
     )
   })
